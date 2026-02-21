@@ -175,11 +175,6 @@ sudo apt install build-essential libbrotli-dev
 pacman -S base-devel brotli
 ```
 
-**Nix:**
-```bash
-nix develop
-```
-
 CUDA toolkit is optional — use `make CUDA=0` for CPU-only builds with OpenMP.
 
 ## License
