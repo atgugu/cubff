@@ -8,7 +8,7 @@ then
   exit 1
 fi
 
-TESTDATA="testdata/$LANG.txt"
+TESTDATA="tests/testdata/$LANG.txt"
 NUM_EPOCHS=256
 SEED=10248
 

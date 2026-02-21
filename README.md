@@ -154,13 +154,13 @@ See `python/cubff_example.py` for a complete example.
 Run a single language against reference output:
 
 ```bash
-./test.sh bff_noheads
+./tests/test.sh bff_noheads
 ```
 
 CI tests all languages. To regenerate test data:
 
 ```bash
-bin/main --lang <language> --max_epochs 256 --disable_output --log testdata/<language>.txt --seed 10248
+bin/main --lang <language> --max_epochs 256 --disable_output --log tests/testdata/<language>.txt --seed 10248
 ```
 
 ## Dependencies

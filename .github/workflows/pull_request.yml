@@ -37,4 +37,4 @@ jobs:
         run: make -j CUDA=0 PYTHON=1
 
       - name: Test ${{ matrix.language }}
-        run: ./test.sh ${{ matrix.language }}
+        run: ./tests/test.sh ${{ matrix.language }}

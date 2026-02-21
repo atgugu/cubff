@@ -41,7 +41,7 @@ else
 	COMPILER := ${CXX}
 endif
 
-LANGS=$(patsubst %.cu,build/%.o,$(wildcard *.cu))
+LANGS=$(patsubst src/%.cu,build/%.o,$(wildcard src/*.cu))
 
 PYEXT=$(shell python3-config --extension-suffix)
 
@@ -55,13 +55,13 @@ endif
 bin/main: build/main.o build/common.o ${LANGS}
 	${COMPILER} $^ ${FLAGS} ${LINK_FLAGS} -o $@
 
-build/%.o: %.cc common.h common_language.h
+build/%.o: src/%.cc src/common.h src/common_language.h
 	${COMPILER} -c ${COMPILE_FLAGS} $< -o $@
 
-build/%.o: %.cu common.h common_language.h forth.inc.h bff.inc.h
+build/%.o: src/%.cu src/common.h src/common_language.h src/forth.inc.h src/bff.inc.h
 	${COMPILER} -c ${COMPILE_FLAGS} $< -o $@
 
-build/cubff_py.o: cubff_py.cc common.h
+build/cubff_py.o: src/cubff_py.cc src/common.h
 	${COMPILER} -c ${COMPILE_FLAGS} $< -o $@ $(shell python3 -m pybind11 --includes)
 
 bin/cubff${PYEXT}: build/cubff_py.o build/common.o ${LANGS}
