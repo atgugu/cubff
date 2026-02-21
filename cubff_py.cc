@@ -47,6 +47,10 @@ PYBIND11_MODULE(cubff, m) {
       .def_readwrite("allowed_interactions",
                      &SimulationParams::allowed_interactions)
       .def_readwrite("eval_selfrep", &SimulationParams::eval_selfrep)
+      .def_readwrite("selfrep_iters", &SimulationParams::selfrep_iters)
+      .def_readwrite("selfrep_gens", &SimulationParams::selfrep_gens)
+      .def_readwrite("selfrep_sample_pct", &SimulationParams::selfrep_sample_pct)
+      .def_readwrite("cpu_fraction", &SimulationParams::cpu_fraction)
       .def(pybind11::init<>());
 
   py::bind_vector<std::vector<uint8_t>>(m, "VectorUint8",
@@ -70,7 +74,15 @@ PYBIND11_MODULE(cubff, m) {
       .def_readonly("frequent_bytes", &SimulationState::frequent_bytes)
       .def_readonly("uncommon_bytes", &SimulationState::uncommon_bytes)
       .def_readonly("replication_per_prog",
-                    &SimulationState::replication_per_prog);
+                    &SimulationState::replication_per_prog)
+      .def_property_readonly("byte_colors",
+                             [](const SimulationState &s) {
+                               py::list result;
+                               for (const auto &c : s.byte_colors) {
+                                 result.append(py::make_tuple(c[0], c[1], c[2]));
+                               }
+                               return result;
+                             });
 
   pybind11::class_<LanguageInterface>(m, "LanguageInterface")
       .def("PrintProgram",

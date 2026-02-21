@@ -18,7 +18,11 @@ LINK_FLAGS := $(shell pkg-config --libs libbrotlienc libbrotlicommon)
 
 ifeq (${CUDA}, 1)
 CUDA_PATH := $(shell which nvcc | xargs realpath | xargs dirname | xargs dirname)
-FLAGS := ${COMMON_FLAGS} -arch sm_75 --compiler-options -Wall,-fPIC \
+GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
+ifeq ($(GPU_ARCH),)
+GPU_ARCH := 50
+endif
+FLAGS := ${COMMON_FLAGS} -arch sm_$(GPU_ARCH) --use_fast_math --compiler-options -Wall,-fPIC \
 					--compiler-bindir $(shell which ${CXX}) \
 					-I ${CUDA_PATH}/include -L ${CUDA_PATH}/lib
 COMPILE_FLAGS := ${FLAGS}

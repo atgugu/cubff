@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CuBFF Live Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-dark: #1e1e1e; --bg-mid: #252526; --bg-light: #2c2c2c; --bg-hover: #383838;
+    --text: #d4d4d4; --text-dim: #808080; --text-bright: #ffffff;
+    --accent: #61afef; --green: #98c379; --yellow: #e5c07b; --red: #e06c75;
+    --cyan: #56b6c2; --purple: #c678dd;
+    --border: #404040; --radius: 6px;
+  }
+  body {
+    background: var(--bg-dark); color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; overflow: hidden; height: 100vh;
+  }
+  .mono { font-family: Consolas, Monaco, 'Courier New', monospace; }
+
+  /* Layout */
+  #app {
+    display: grid; height: 100vh;
+    grid-template-rows: 42px 1fr;
+    grid-template-columns: 220px 1fr;
+    grid-template-areas: "header header" "sidebar main";
+  }
+
+  /* Header */
+  #header {
+    grid-area: header; background: var(--bg-mid); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; padding: 0 16px;
+  }
+  #header h1 { font-size: 15px; font-weight: 600; color: var(--text-bright); white-space: nowrap; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    font-weight: 600; white-space: nowrap;
+  }
+  .badge-lang { background: #2a4a6b; color: var(--accent); }
+  .badge-epoch { background: #2a3d2a; color: var(--green); }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red); transition: background 0.3s;
+  }
+  #status-dot.connected { background: var(--green); }
+  #status-dot.connecting { background: var(--yellow); }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  #connect-input {
+    background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); padding: 3px 8px; font-size: 12px; width: 200px;
+  }
+  #connect-btn, #pause-btn {
+    background: var(--bg-light); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); padding: 3px 10px; font-size: 12px; cursor: pointer;
+  }
+  #connect-btn:hover, #pause-btn:hover { background: var(--bg-hover); }
+  #fps-counter { font-size: 11px; color: var(--text-dim); min-width: 60px; text-align: right; }
+  .interval-control { display: flex; align-items: center; gap: 6px; }
+  #interval-label { font-size: 11px; color: var(--text-dim); white-space: nowrap; min-width: 70px; text-align: right; }
+  #interval-slider {
+    width: 80px; height: 4px; -webkit-appearance: none; appearance: none;
+    background: var(--bg-dark); border-radius: 2px; outline: none;
+  }
+  #interval-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+  }
+  #interval-slider::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%; border: none;
+    background: var(--accent); cursor: pointer;
+  }
+
+  /* Sidebar */
+  #sidebar {
+    grid-area: sidebar; background: var(--bg-mid); border-right: 1px solid var(--border);
+    padding: 12px; overflow-y: auto;
+  }
+  .stat-group { margin-bottom: 14px; }
+  .stat-group-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); margin-bottom: 6px;
+  }
+  .stat-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .stat-label { color: var(--text-dim); font-size: 12px; }
+  .stat-value { font-weight: 600; font-size: 12px; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.cyan { color: var(--cyan); }
+  .stat-value.red { color: var(--red); }
+
+  /* Replicator bar */
+  .rep-bar-container {
+    width: 100%; height: 6px; background: var(--bg-dark);
+    border-radius: 3px; margin-top: 4px; overflow: hidden;
+  }
+  .rep-bar {
+    height: 100%; background: var(--green); border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  /* Main area */
+  #main {
+    grid-area: main; display: grid; gap: 8px; padding: 8px;
+    grid-template-rows: 1fr 220px;
+    grid-template-columns: 1fr 320px;
+    grid-template-areas: "heatmap chart" "heatmap bottom";
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--bg-mid); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .panel-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-dim); padding: 8px 10px 4px; background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Heatmap */
+  #heatmap-panel {
+    grid-area: heatmap; display: flex; flex-direction: column; min-height: 0;
+  }
+
+  /* Tab bar */
+  .tab-bar {
+    display: flex; gap: 0; background: var(--bg-light);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .tab-btn {
+    padding: 5px 12px; font-size: 11px; cursor: pointer;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--text-dim); white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-right { margin-left: auto; display: flex; align-items: center; padding-right: 8px; }
+  .tab-right select {
+    font-size: 10px; background: var(--bg-dark); color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 3px; padding: 1px 4px;
+  }
+
+  #heatmap-wrap {
+    flex: 1; overflow: hidden; position: relative;
+    cursor: crosshair;
+  }
+  #heatmap-canvas, .viz-canvas {
+    image-rendering: pixelated; width: 100%; height: 100%; display: block;
+  }
+  .viz-canvas { display: none; }
+  .viz-canvas.active { display: block; }
+
+  /* Chart */
+  #chart-panel { grid-area: chart; display: flex; flex-direction: column; }
+  #chart-canvas { flex: 1; width: 100%; }
+
+  /* Bottom panels */
+  #bottom-area {
+    grid-area: bottom; display: grid; gap: 8px;
+    grid-template-columns: 1fr 1fr;
+  }
+  #byte-panel, #rep-panel { display: flex; flex-direction: column; }
+  #byte-bars { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .byte-row {
+    display: flex; align-items: center; gap: 4px; margin-bottom: 2px;
+    font-size: 11px; height: 16px;
+  }
+  .byte-swatch {
+    width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+  }
+  .byte-label { width: 26px; text-align: right; color: var(--text-dim); flex-shrink: 0; }
+  .byte-bar-bg {
+    flex: 1; height: 10px; background: var(--bg-dark); border-radius: 2px; overflow: hidden;
+  }
+  .byte-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .byte-pct { width: 38px; text-align: right; color: var(--text-dim); flex-shrink: 0; }
+
+  #rep-content { padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
+  .rep-big { font-size: 36px; font-weight: 700; color: var(--green); line-height: 1.1; }
+  .rep-subtitle { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* Inspector */
+  #inspector {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg-mid); border-top: 2px solid var(--accent);
+    padding: 10px 16px; z-index: 100;
+    display: none; max-height: 140px; overflow-y: auto;
+  }
+  #inspector.visible { display: block; }
+  #inspector-close {
+    float: right; cursor: pointer; color: var(--text-dim);
+    background: none; border: none; font-size: 16px;
+  }
+  #inspector-title { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  #inspector-bytes {
+    display: flex; flex-wrap: wrap; gap: 1px;
+  }
+  .insp-byte {
+    width: 18px; height: 26px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; border-radius: 2px;
+    font-size: 8px; line-height: 1.2;
+  }
+  .insp-byte-hex { font-size: 7px; opacity: 0.7; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    #app {
+      grid-template-columns: 1fr;
+      grid-template-rows: 42px auto 1fr;
+      grid-template-areas: "header" "sidebar" "main";
+    }
+    #sidebar { max-height: 120px; overflow-y: auto; }
+    #main {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr 200px 200px;
+      grid-template-areas: "heatmap" "chart" "bottom";
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div id="header">
+    <h1>CuBFF Live Dashboard</h1>
+    <span class="badge badge-lang mono" id="lang-badge">--</span>
+    <span class="badge badge-epoch mono" id="epoch-badge">epoch 0</span>
+    <div id="status-dot" title="Disconnected"></div>
+    <div class="header-right">
+      <input type="text" id="connect-input" class="mono" value="ws://localhost:8765" placeholder="ws://host:port">
+      <button id="connect-btn">Connect</button>
+      <button id="pause-btn" title="Pause rendering">&#9208;</button>
+      <div class="interval-control">
+        <input type="range" id="interval-slider" min="0" max="5" value="0" step="1">
+        <span id="interval-label" class="mono">every 1 ep</span>
+      </div>
+      <span id="fps-counter" class="mono">-- fps</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="stat-group">
+      <div class="stat-group-title">Performance</div>
+      <div class="stat-row"><span class="stat-label">Epoch</span><span class="stat-value accent mono" id="s-epoch">0</span></div>
+      <div class="stat-row"><span class="stat-label">MOps/s</span><span class="stat-value cyan mono" id="s-mops">0</span></div>
+      <div class="stat-row"><span class="stat-label">Ops/run</span><span class="stat-value mono" id="s-opsrun">0</span></div>
+      <div class="stat-row"><span class="stat-label">Total ops</span><span class="stat-value mono" id="s-totalops">0</span></div>
+    </div>
+    <div class="stat-group">
+      <div class="stat-group-title">Compression</div>
+      <div class="stat-row"><span class="stat-label">Brotli bpb</span><span class="stat-value cyan mono" id="s-bpb">0</span></div>
+      <div class="stat-row"><span class="stat-label">H0 (entropy)</span><span class="stat-value mono" id="s-h0">0</span></div>
+      <div class="stat-row"><span class="stat-label">Higher ent.</span><span class="stat-value yellow mono" id="s-hent">0</span></div>
+      <div class="stat-row"><span class="stat-label">Brotli size</span><span class="stat-value mono" id="s-bsize">0</span></div>
+      <div class="stat-row"><span class="stat-label">Bytes/prog</span><span class="stat-value mono" id="s-bprog">0</span></div>
+    </div>
+    <div class="stat-group" id="rep-stats" style="display:none">
+      <div class="stat-group-title">Self-Replicators</div>
+      <div class="stat-row"><span class="stat-label">Count</span><span class="stat-value green mono" id="s-repcount">0</span></div>
+      <div class="stat-row"><span class="stat-label">Fraction</span><span class="stat-value green mono" id="s-repfrac">0%</span></div>
+      <div class="rep-bar-container"><div class="rep-bar" id="s-repbar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div id="main">
+    <div class="panel" id="heatmap-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="soup">Soup</button>
+        <button class="tab-btn" data-tab="kymograph">Kymograph</button>
+        <button class="tab-btn" data-tab="spectrogram">Spectrogram</button>
+        <button class="tab-btn" data-tab="entropy">Entropy</button>
+        <button class="tab-btn" data-tab="repscore">Rep Score</button>
+        <div class="tab-right">
+          <span id="heatmap-info" style="font-size:10px;margin-right:8px"></span>
+          <select id="kymo-mode" style="display:none" title="Kymograph color mode">
+            <option value="mean">Mean Byte</option>
+            <option value="dominant">Dominant Byte</option>
+            <option value="repscore">Rep Score</option>
+          </select>
+        </div>
+      </div>
+      <div id="heatmap-wrap">
+        <canvas id="heatmap-canvas"></canvas>
+        <canvas id="kymo-canvas" class="viz-canvas"></canvas>
+        <canvas id="spectro-canvas" class="viz-canvas"></canvas>
+        <canvas id="entropy-canvas" class="viz-canvas"></canvas>
+        <canvas id="repscore-canvas" class="viz-canvas"></canvas>
+      </div>
+    </div>
+    <div class="panel" id="chart-panel">
+      <div class="panel-title">Metrics Over Time</div>
+      <canvas id="chart-canvas"></canvas>
+    </div>
+    <div id="bottom-area">
+      <div class="panel" id="byte-panel">
+        <div class="panel-title">Byte Frequency</div>
+        <div id="byte-bars"></div>
+      </div>
+      <div class="panel" id="rep-panel">
+        <div class="panel-title">Replicators</div>
+        <div id="rep-content">
+          <div class="rep-big" id="rep-big-num">0</div>
+          <div class="rep-subtitle">self-replicators detected</div>
+          <div class="rep-bar-container" style="width:80%;margin-top:10px">
+            <div class="rep-bar" id="rep-big-bar" style="width:0%"></div>
+          </div>
+          <div class="rep-subtitle" id="rep-big-frac" style="margin-top:4px">0%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Inspector -->
+<div id="inspector">
+  <button id="inspector-close">&times;</button>
+  <div id="inspector-title">Program #0</div>
+  <div id="inspector-bytes"></div>
+</div>
+
+<script>
+"use strict";
+
+// ---- State ----
+const state = {
+  ws: null,
+  byteColors: null,     // Uint8Array[256*3] flat RGB
+  numPrograms: 0,
+  tapeSize: 64,
+  lang: '',
+  evalSelfrep: false,
+  maxVisible: 1024,
+  callbackInterval: 1,
+  paused: false,
+  metricsHistory: [],    // {epoch, bpb, h0, hent, repCount}
+  maxHistory: 500,
+  lastSoup: null,        // {visibleCount, stride, data: Uint8Array, repFlags: Uint8Array|null}
+  pendingMetrics: null,
+  pendingSoup: null,
+  frameCount: 0,
+  fpsTimer: 0,
+  lastFpsTime: performance.now(),
+  activeTab: 'soup',
+  // Kymograph ring buffer: 512 rows x 1024 programs, stores summary per program
+  kymoData: null,       // Float32Array[512*1024] for mean byte or Uint8Array for dominant
+  kymoRepData: null,    // Float32Array[512*1024] for rep scores
+  kymoDomData: null,    // Uint8Array[512*1024] for dominant byte
+  kymoRow: 0,
+  kymoRows: 512,
+  kymoCols: 1024,
+  kymoFilled: 0,
+  kymoMode: 'mean',
+  // Spectrogram ring buffer: 500 columns x 256 rows
+  spectroData: null,    // Float32Array[500*256]
+  spectroCol: 0,
+  spectroCols: 500,
+  spectroFilled: 0,
+  // Positional entropy ring buffer: 500 columns x 64 rows
+  entropyData: null,    // Float32Array[500*64]
+  entropyCol: 0,
+  entropyCols: 500,
+  entropyFilled: 0,
+};
+
+// ---- DOM refs ----
+const $ = id => document.getElementById(id);
+const dom = {
+  langBadge: $('lang-badge'), epochBadge: $('epoch-badge'),
+  statusDot: $('status-dot'), connectInput: $('connect-input'),
+  connectBtn: $('connect-btn'), pauseBtn: $('pause-btn'), fpsCounter: $('fps-counter'),
+  sEpoch: $('s-epoch'), sMops: $('s-mops'), sOpsrun: $('s-opsrun'), sTotalops: $('s-totalops'),
+  sBpb: $('s-bpb'), sH0: $('s-h0'), sHent: $('s-hent'), sBsize: $('s-bsize'), sBprog: $('s-bprog'),
+  sRepcount: $('s-repcount'), sRepfrac: $('s-repfrac'), sRepbar: $('s-repbar'),
+  repStats: $('rep-stats'),
+  heatmapCanvas: $('heatmap-canvas'), heatmapWrap: $('heatmap-wrap'), heatmapInfo: $('heatmap-info'),
+  kymoCanvas: $('kymo-canvas'), spectroCanvas: $('spectro-canvas'),
+  entropyCanvas: $('entropy-canvas'), repscoreCanvas: $('repscore-canvas'),
+  kymoMode: $('kymo-mode'),
+  chartCanvas: $('chart-canvas'),
+  byteBars: $('byte-bars'),
+  repBigNum: $('rep-big-num'), repBigBar: $('rep-big-bar'), repBigFrac: $('rep-big-frac'),
+  inspector: $('inspector'), inspectorTitle: $('inspector-title'),
+  inspectorBytes: $('inspector-bytes'), inspectorClose: $('inspector-close'),
+};
+
+// ---- Colormaps (precomputed LUTs, 256 entries each, flat RGB) ----
+function makeViridisLUT() {
+  // Attempt at a reasonable viridis approximation
+  const lut = new Uint8Array(256 * 3);
+  const stops = [
+    [0, 68, 1, 84], [32, 59, 82, 139], [64, 33, 145, 140],
+    [128, 94, 201, 98], [192, 189, 223, 38], [255, 253, 231, 37]
+  ];
+  for (let i = 0; i < 256; i++) {
+    let lo = 0;
+    for (let s = 1; s < stops.length; s++) {
+      if (i <= stops[s][0]) { lo = s - 1; break; }
+    }
+    const hi = lo + 1;
+    const t = (i - stops[lo][0]) / (stops[hi][0] - stops[lo][0]);
+    lut[i*3]   = Math.round(stops[lo][1] + t * (stops[hi][1] - stops[lo][1]));
+    lut[i*3+1] = Math.round(stops[lo][2] + t * (stops[hi][2] - stops[lo][2]));
+    lut[i*3+2] = Math.round(stops[lo][3] + t * (stops[hi][3] - stops[lo][3]));
+  }
+  return lut;
+}
+
+function makeInfernoLUT() {
+  const lut = new Uint8Array(256 * 3);
+  const stops = [
+    [0, 0, 0, 4], [42, 40, 11, 84], [85, 101, 21, 110],
+    [128, 159, 53, 80], [170, 212, 110, 31], [213, 251, 186, 25],
+    [255, 252, 255, 164]
+  ];
+  for (let i = 0; i < 256; i++) {
+    let lo = 0;
+    for (let s = 1; s < stops.length; s++) {
+      if (i <= stops[s][0]) { lo = s - 1; break; }
+    }
+    const hi = lo + 1;
+    const t = (i - stops[lo][0]) / (stops[hi][0] - stops[lo][0]);
+    lut[i*3]   = Math.round(stops[lo][1] + t * (stops[hi][1] - stops[lo][1]));
+    lut[i*3+1] = Math.round(stops[lo][2] + t * (stops[hi][2] - stops[lo][2]));
+    lut[i*3+2] = Math.round(stops[lo][3] + t * (stops[hi][3] - stops[lo][3]));
+  }
+  return lut;
+}
+
+function makeEntropyLUT() {
+  // Blue (low entropy, 0) -> White (mid) -> Red (high entropy, 8 bits)
+  // Map: 0=deep blue, 128=white, 255=deep red
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 128; i++) {
+    const t = i / 127;
+    lut[i*3]   = Math.round(t * 255);
+    lut[i*3+1] = Math.round(t * 255);
+    lut[i*3+2] = Math.round(100 + t * 155);
+  }
+  for (let i = 128; i < 256; i++) {
+    const t = (i - 128) / 127;
+    lut[i*3]   = Math.round(255);
+    lut[i*3+1] = Math.round(255 * (1 - t));
+    lut[i*3+2] = Math.round(255 * (1 - t));
+  }
+  return lut;
+}
+
+function makeRepScoreLUT() {
+  // 0=dim gray, 1-4=reddish, 5-9=bright green, 10-13=bright green
+  const lut = new Uint8Array(14 * 3);
+  // Score 0: dim
+  lut[0] = 60; lut[1] = 60; lut[2] = 60;
+  for (let s = 1; s <= 4; s++) {
+    const i = s * 3;
+    lut[i] = 180; lut[i+1] = 80; lut[i+2] = 80;
+  }
+  for (let s = 5; s <= 13; s++) {
+    const i = s * 3;
+    const bright = Math.min(255, 120 + (s - 5) * 17);
+    lut[i] = 60; lut[i+1] = bright; lut[i+2] = 60;
+  }
+  return lut;
+}
+
+const viridisLUT = makeViridisLUT();
+const infernoLUT = makeInfernoLUT();
+const entropyLUT = makeEntropyLUT();
+const repScoreLUT = makeRepScoreLUT();
+
+// ---- Tab Switching ----
+const tabBtns = document.querySelectorAll('.tab-btn');
+const vizCanvases = {
+  soup: dom.heatmapCanvas,
+  kymograph: dom.kymoCanvas,
+  spectrogram: dom.spectroCanvas,
+  entropy: dom.entropyCanvas,
+  repscore: dom.repscoreCanvas,
+};
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  dom.heatmapCanvas.style.display = tab === 'soup' ? 'block' : 'none';
+  for (const [name, canvas] of Object.entries(vizCanvases)) {
+    if (name === 'soup') continue;
+    canvas.classList.toggle('active', name === tab);
+  }
+  dom.kymoMode.style.display = tab === 'kymograph' ? '' : 'none';
+}
+
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+dom.kymoMode.addEventListener('change', (e) => {
+  state.kymoMode = e.target.value;
+});
+
+// ---- Canvas contexts for new views ----
+const kymoCtx = dom.kymoCanvas.getContext('2d');
+const spectroCtx = dom.spectroCanvas.getContext('2d');
+const entropyCtx = dom.entropyCanvas.getContext('2d');
+const repscoreCtx = dom.repscoreCanvas.getContext('2d');
+
+// ---- WebSocket ----
+let reconnectTimer = null;
+
+function connect() {
+  if (state.ws) { state.ws.close(); state.ws = null; }
+  const url = dom.connectInput.value.trim();
+  dom.statusDot.className = 'connecting';
+  dom.statusDot.title = 'Connecting...';
+
+  const ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+  state.ws = ws;
+
+  ws.onopen = () => {
+    dom.statusDot.className = 'connected';
+    dom.statusDot.title = 'Connected';
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onmessage = (event) => {
+    if (typeof event.data === 'string') {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'init') handleInit(msg);
+      else if (msg.type === 'metrics') handleMetrics(msg);
+    } else {
+      handleSoup(event.data);
+    }
+  };
+
+  ws.onclose = () => {
+    dom.statusDot.className = '';
+    dom.statusDot.title = 'Disconnected';
+    state.ws = null;
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+function handleInit(msg) {
+  state.lang = msg.lang;
+  state.numPrograms = msg.num_programs;
+  state.tapeSize = msg.tape_size || 64;
+  state.evalSelfrep = msg.eval_selfrep || false;
+  state.maxVisible = msg.max_visible || 1024;
+
+  // Store byte colors as flat RGB array
+  state.byteColors = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    state.byteColors[i * 3] = msg.byte_colors[i][0];
+    state.byteColors[i * 3 + 1] = msg.byte_colors[i][1];
+    state.byteColors[i * 3 + 2] = msg.byte_colors[i][2];
+  }
+
+  state.callbackInterval = msg.callback_interval || 8;
+  dom.langBadge.textContent = msg.lang;
+  if (state.evalSelfrep) dom.repStats.style.display = '';
+  state.metricsHistory = [];
+
+  // Update interval slider label with actual base interval
+  const slider = $('interval-slider');
+  const decimation = Math.pow(2, parseInt(slider.value));
+  $('interval-label').textContent = 'every ' + (state.callbackInterval * decimation) + ' ep';
+}
+
+function handleMetrics(msg) {
+  state.pendingMetrics = msg;
+
+  // Feed spectrogram ring buffer from byte_histogram
+  if (msg.byte_histogram) {
+    if (!state.spectroData) {
+      state.spectroData = new Float32Array(state.spectroCols * 256);
+      state.spectroCol = 0;
+      state.spectroFilled = 0;
+    }
+    const col = state.spectroCol;
+    for (let i = 0; i < 256; i++) {
+      state.spectroData[col * 256 + i] = msg.byte_histogram[i];
+    }
+    state.spectroCol = (col + 1) % state.spectroCols;
+    if (state.spectroFilled < state.spectroCols) state.spectroFilled++;
+  }
+
+  // Feed entropy ring buffer from positional_entropy
+  if (msg.positional_entropy) {
+    if (!state.entropyData) {
+      state.entropyData = new Float32Array(state.entropyCols * 64);
+      state.entropyCol = 0;
+      state.entropyFilled = 0;
+    }
+    const col = state.entropyCol;
+    for (let i = 0; i < 64; i++) {
+      state.entropyData[col * 64 + i] = msg.positional_entropy[i];
+    }
+    state.entropyCol = (col + 1) % state.entropyCols;
+    if (state.entropyFilled < state.entropyCols) state.entropyFilled++;
+  }
+}
+
+function handleSoup(buffer) {
+  const view = new DataView(buffer);
+  const type = view.getUint8(0);
+  if (type !== 0x01) return;
+
+  const visibleCount = view.getUint32(1, true);
+  const stride = view.getUint32(5, true);
+  const hasSelfrep = view.getUint8(9);
+  const dataStart = 10;
+  const dataLen = visibleCount * 64;
+  const data = new Uint8Array(buffer, dataStart, dataLen);
+
+  let repFlags = null;
+  if (hasSelfrep) {
+    repFlags = new Uint8Array(buffer, dataStart + dataLen, visibleCount);
+  }
+
+  state.pendingSoup = { visibleCount, stride, data, repFlags };
+
+  // Feed kymograph ring buffer
+  const kCols = state.kymoCols;
+  if (!state.kymoData) {
+    state.kymoData = new Float32Array(state.kymoRows * kCols);
+    state.kymoRepData = new Float32Array(state.kymoRows * kCols);
+    state.kymoDomData = new Uint8Array(state.kymoRows * kCols);
+    state.kymoRow = 0;
+    state.kymoFilled = 0;
+  }
+  const row = state.kymoRow;
+  const rowOff = row * kCols;
+  const sampleStride = visibleCount > kCols ? visibleCount / kCols : 1;
+
+  for (let c = 0; c < kCols; c++) {
+    const srcIdx = Math.min(Math.floor(c * sampleStride), visibleCount - 1);
+    // Mean byte value for this program
+    let sum = 0;
+    const progOff = srcIdx * 64;
+    const counts = new Uint8Array(256);
+    for (let b = 0; b < 64; b++) {
+      const v = data[progOff + b];
+      sum += v;
+      counts[v]++;
+    }
+    state.kymoData[rowOff + c] = sum / 64;
+    // Dominant byte
+    let maxCount = 0, dominant = 0;
+    for (let i = 0; i < 256; i++) {
+      if (counts[i] > maxCount) { maxCount = counts[i]; dominant = i; }
+    }
+    state.kymoDomData[rowOff + c] = dominant;
+    // Rep score
+    state.kymoRepData[rowOff + c] = repFlags ? repFlags[srcIdx] : 0;
+  }
+  state.kymoRow = (row + 1) % state.kymoRows;
+  if (state.kymoFilled < state.kymoRows) state.kymoFilled++;
+}
+
+// ---- Rendering ----
+const heatmapCtx = dom.heatmapCanvas.getContext('2d');
+const chartCtx = dom.chartCanvas.getContext('2d');
+
+function renderFrame() {
+  requestAnimationFrame(renderFrame);
+  if (state.paused) return;
+
+  const metrics = state.pendingMetrics;
+  const soup = state.pendingSoup;
+  if (!metrics && !soup) return;
+
+  if (metrics) {
+    state.pendingMetrics = null;
+    updateStats(metrics);
+    state.metricsHistory.push({
+      epoch: metrics.epoch,
+      bpb: metrics.brotli_bpb,
+      h0: metrics.h0,
+      hent: metrics.higher_entropy,
+      repCount: metrics.replicator_count,
+      repFrac: metrics.replicator_fraction,
+    });
+    if (state.metricsHistory.length > state.maxHistory)
+      state.metricsHistory.shift();
+    renderChart();
+    renderByteFreq(metrics);
+    renderRepPanel(metrics);
+  }
+
+  if (soup) {
+    state.pendingSoup = null;
+    state.lastSoup = soup;
+    renderHeatmap(soup);
+    renderRepScoreHeatmap(soup);
+  }
+
+  if (state.kymoFilled > 0) renderKymograph();
+  if (state.spectroFilled > 0) renderSpectrogram();
+  if (state.entropyFilled > 0) renderEntropy();
+
+  state.frameCount++;
+  const now = performance.now();
+  if (now - state.lastFpsTime >= 1000) {
+    const fps = Math.round(state.frameCount * 1000 / (now - state.lastFpsTime));
+    dom.fpsCounter.textContent = fps + ' fps';
+    state.frameCount = 0;
+    state.lastFpsTime = now;
+  }
+}
+requestAnimationFrame(renderFrame);
+
+function updateStats(m) {
+  dom.epochBadge.textContent = 'epoch ' + m.epoch.toLocaleString();
+  dom.sEpoch.textContent = m.epoch.toLocaleString();
+  dom.sMops.textContent = m.mops_s.toFixed(1);
+  dom.sOpsrun.textContent = m.ops_per_run.toFixed(0);
+  dom.sTotalops.textContent = formatBig(m.total_ops);
+  dom.sBpb.textContent = m.brotli_bpb.toFixed(3);
+  dom.sH0.textContent = m.h0.toFixed(3);
+  dom.sHent.textContent = m.higher_entropy.toFixed(3);
+  dom.sBsize.textContent = formatBig(m.brotli_size);
+  dom.sBprog.textContent = m.bytes_per_prog.toFixed(2);
+
+  if (state.evalSelfrep) {
+    dom.sRepcount.textContent = m.replicator_count.toLocaleString();
+    dom.sRepfrac.textContent = (m.replicator_fraction * 100).toFixed(2) + '%';
+    dom.sRepbar.style.width = (m.replicator_fraction * 100) + '%';
+  }
+}
+
+function formatBig(n) {
+  if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'G';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+// ---- Heatmap ----
+function renderHeatmap(soup) {
+  const w = soup.visibleCount;  // programs along X
+  const h = 64;                 // byte positions along Y
+  if (dom.heatmapCanvas.width !== w || dom.heatmapCanvas.height !== h) {
+    dom.heatmapCanvas.width = w;
+    dom.heatmapCanvas.height = h;
+  }
+
+  const imgData = heatmapCtx.createImageData(w, h);
+  const pixels = imgData.data;
+  const colors = state.byteColors;
+  const soupData = soup.data;
+  const repFlags = soup.repFlags;
+
+  for (let prog = 0; prog < w; prog++) {
+    const progOff = prog * 64;
+    const score = repFlags ? repFlags[prog] : 0;
+    const isRep = score >= 5; // kSelfrepThreshold
+    for (let bytePos = 0; bytePos < 64; bytePos++) {
+      const byteVal = soupData[progOff + bytePos];
+      const ci = byteVal * 3;
+      const pi = (bytePos * w + prog) * 4;  // transposed: Y=bytePos, X=prog
+
+      // Green top border for replicators
+      if (isRep && bytePos < 1) {
+        pixels[pi] = 0x98;
+        pixels[pi + 1] = 0xc3;
+        pixels[pi + 2] = 0x79;
+      } else {
+        pixels[pi] = colors[ci];
+        pixels[pi + 1] = colors[ci + 1];
+        pixels[pi + 2] = colors[ci + 2];
+      }
+      pixels[pi + 3] = 255;
+    }
+  }
+
+  heatmapCtx.putImageData(imgData, 0, 0);
+  dom.heatmapInfo.textContent = `${w} / ${state.numPrograms} programs (stride ${soup.stride})`;
+}
+
+// ---- Click on heatmap -> inspect program ----
+dom.heatmapWrap.addEventListener('click', (e) => {
+  if (!state.lastSoup) return;
+  const tab = state.activeTab;
+  // Only soup and repscore tabs support click-to-inspect
+  if (tab !== 'soup' && tab !== 'repscore') return;
+  const canvas = tab === 'soup' ? dom.heatmapCanvas : dom.repscoreCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const col = Math.floor((e.clientX - rect.left) * scaleX);
+  if (col < 0 || col >= state.lastSoup.visibleCount) return;
+
+  const progIdx = col * state.lastSoup.stride;
+  const bytes = state.lastSoup.data.slice(col * 64, (col + 1) * 64);
+  const score = state.lastSoup.repFlags ? state.lastSoup.repFlags[col] : 0;
+  showInspector(progIdx, bytes, score);
+});
+
+function showInspector(progIdx, bytes, score) {
+  const repLabel = score >= 5 ? ` (self-replicator, score ${score}/13)` : (score > 0 ? ` (score ${score}/13)` : '');
+  dom.inspectorTitle.textContent = `Program #${progIdx}${repLabel}`;
+  dom.inspectorBytes.innerHTML = '';
+  const colors = state.byteColors;
+  for (let i = 0; i < bytes.length; i++) {
+    const v = bytes[i];
+    const r = colors[v * 3], g = colors[v * 3 + 1], b = colors[v * 3 + 2];
+    const lum = r * 0.299 + g * 0.587 + b * 0.114;
+    const textCol = lum > 140 ? '#000' : '#fff';
+    const div = document.createElement('div');
+    div.className = 'insp-byte mono';
+    div.style.background = `rgb(${r},${g},${b})`;
+    div.style.color = textCol;
+    div.innerHTML = `<span>${String.fromCharCode(v >= 32 && v < 127 ? v : 183)}</span><span class="insp-byte-hex">${v.toString(16).padStart(2, '0')}</span>`;
+    dom.inspectorBytes.appendChild(div);
+  }
+  dom.inspector.classList.add('visible');
+}
+
+dom.inspectorClose.addEventListener('click', () => {
+  dom.inspector.classList.remove('visible');
+});
+
+// ---- Kymograph ----
+function renderKymograph() {
+  const cols = state.kymoCols;
+  const filled = state.kymoFilled;
+  const rows = Math.min(filled, state.kymoRows);
+  if (rows < 1) return;
+
+  const canvas = dom.kymoCanvas;
+  if (canvas.width !== cols || canvas.height !== state.kymoRows) {
+    canvas.width = cols;
+    canvas.height = state.kymoRows;
+  }
+
+  const imgData = kymoCtx.createImageData(cols, state.kymoRows);
+  const pixels = imgData.data;
+  const mode = state.kymoMode;
+  const startRow = state.kymoRow; // ring buffer head (next write position)
+
+  for (let y = 0; y < state.kymoRows; y++) {
+    // Map display row y (0=oldest) to ring buffer index
+    const bufRow = (startRow - filled + y + state.kymoRows * 2) % state.kymoRows;
+    if (y >= filled) {
+      // Not yet filled - black
+      for (let x = 0; x < cols; x++) {
+        const pi = (y * cols + x) * 4;
+        pixels[pi] = 0; pixels[pi+1] = 0; pixels[pi+2] = 0; pixels[pi+3] = 255;
+      }
+      continue;
+    }
+    const rowOff = bufRow * cols;
+    for (let x = 0; x < cols; x++) {
+      const pi = (y * cols + x) * 4;
+      if (mode === 'mean') {
+        const val = state.kymoData[rowOff + x];
+        const ci = Math.round(val) * 3;
+        pixels[pi] = viridisLUT[ci]; pixels[pi+1] = viridisLUT[ci+1]; pixels[pi+2] = viridisLUT[ci+2];
+      } else if (mode === 'dominant') {
+        const val = state.kymoDomData[rowOff + x];
+        const ci = val * 3;
+        pixels[pi] = state.byteColors[ci]; pixels[pi+1] = state.byteColors[ci+1]; pixels[pi+2] = state.byteColors[ci+2];
+      } else { // repscore
+        const score = state.kymoRepData[rowOff + x];
+        if (score === 0) {
+          pixels[pi] = 10; pixels[pi+1] = 10; pixels[pi+2] = 10;
+        } else if (score < 5) {
+          const bright = 60 + score * 30;
+          pixels[pi] = bright; pixels[pi+1] = Math.round(bright * 0.4); pixels[pi+2] = 0;
+        } else {
+          const bright = Math.min(255, 80 + (score - 5) * 22);
+          pixels[pi] = 0; pixels[pi+1] = bright; pixels[pi+2] = 0;
+        }
+      }
+      pixels[pi+3] = 255;
+    }
+  }
+
+  kymoCtx.putImageData(imgData, 0, 0);
+}
+
+// ---- Byte Spectrogram ----
+function renderSpectrogram() {
+  const cols = state.spectroCols;
+  const filled = state.spectroFilled;
+  if (filled < 1) return;
+
+  const canvas = dom.spectroCanvas;
+  if (canvas.width !== cols || canvas.height !== 256) {
+    canvas.width = cols;
+    canvas.height = 256;
+  }
+
+  // Find max frequency for normalization
+  let maxFreq = 0;
+  for (let i = 0; i < state.spectroData.length; i++) {
+    if (state.spectroData[i] > maxFreq) maxFreq = state.spectroData[i];
+  }
+  if (maxFreq < 0.001) maxFreq = 0.001;
+
+  const imgData = spectroCtx.createImageData(cols, 256);
+  const pixels = imgData.data;
+  const startCol = state.spectroCol;
+
+  for (let x = 0; x < cols; x++) {
+    const bufCol = (startCol - filled + x + cols * 2) % cols;
+    const colOff = bufCol * 256;
+    const isValid = x < filled;
+    for (let y = 0; y < 256; y++) {
+      const pi = (y * cols + x) * 4;
+      if (!isValid) {
+        pixels[pi] = 0; pixels[pi+1] = 0; pixels[pi+2] = 0; pixels[pi+3] = 255;
+        continue;
+      }
+      // Y=0 is byte 255 (top), Y=255 is byte 0 (bottom)
+      const byteVal = 255 - y;
+      const freq = state.spectroData[colOff + byteVal];
+      const norm = Math.min(1, freq / maxFreq);
+      const ci = Math.round(norm * 255) * 3;
+      pixels[pi] = infernoLUT[ci]; pixels[pi+1] = infernoLUT[ci+1]; pixels[pi+2] = infernoLUT[ci+2];
+      pixels[pi+3] = 255;
+    }
+  }
+
+  spectroCtx.putImageData(imgData, 0, 0);
+}
+
+// ---- Positional Entropy Heatmap ----
+function renderEntropy() {
+  const cols = state.entropyCols;
+  const filled = state.entropyFilled;
+  if (filled < 1) return;
+
+  const canvas = dom.entropyCanvas;
+  if (canvas.width !== cols || canvas.height !== 64) {
+    canvas.width = cols;
+    canvas.height = 64;
+  }
+
+  const imgData = entropyCtx.createImageData(cols, 64);
+  const pixels = imgData.data;
+  const startCol = state.entropyCol;
+
+  for (let x = 0; x < cols; x++) {
+    const bufCol = (startCol - filled + x + cols * 2) % cols;
+    const colOff = bufCol * 64;
+    const isValid = x < filled;
+    for (let y = 0; y < 64; y++) {
+      const pi = (y * cols + x) * 4;
+      if (!isValid) {
+        pixels[pi] = 0; pixels[pi+1] = 0; pixels[pi+2] = 0; pixels[pi+3] = 255;
+        continue;
+      }
+      const entropy = state.entropyData[colOff + y];
+      // Map 0-8 bits to 0-255 for LUT
+      const norm = Math.round(Math.min(1, entropy / 8) * 255);
+      const ci = norm * 3;
+      pixels[pi] = entropyLUT[ci]; pixels[pi+1] = entropyLUT[ci+1]; pixels[pi+2] = entropyLUT[ci+2];
+      pixels[pi+3] = 255;
+    }
+  }
+
+  entropyCtx.putImageData(imgData, 0, 0);
+}
+
+// ---- Rep Score Heatmap ----
+function renderRepScoreHeatmap(soup) {
+  const w = soup.visibleCount;  // programs along X
+  const h = 64;                 // byte positions along Y
+  const canvas = dom.repscoreCanvas;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+
+  const imgData = repscoreCtx.createImageData(w, h);
+  const pixels = imgData.data;
+  const colors = state.byteColors;
+  const soupData = soup.data;
+  const repFlags = soup.repFlags;
+  const threshold = 5; // cubff.kSelfrepThreshold
+
+  for (let prog = 0; prog < w; prog++) {
+    const progOff = prog * 64;
+    const score = repFlags ? repFlags[prog] : 0;
+    let brightness, tintR, tintG, tintB;
+
+    if (score === 0) {
+      brightness = 0.25;
+      tintR = 0; tintG = 0; tintB = 0;
+    } else if (score < threshold) {
+      brightness = 0.5;
+      tintR = 40; tintG = 0; tintB = 0; // red tint
+    } else if (score < 10) {
+      brightness = 1.0;
+      tintR = 0; tintG = 30; tintB = 0; // green tint
+    } else {
+      brightness = 1.0;
+      tintR = 0; tintG = 50; tintB = 0; // stronger green
+    }
+
+    for (let bytePos = 0; bytePos < 64; bytePos++) {
+      const byteVal = soupData[progOff + bytePos];
+      const ci = byteVal * 3;
+      const pi = (bytePos * w + prog) * 4;  // transposed: Y=bytePos, X=prog
+
+      // Green top border for replicators
+      if (score >= threshold && bytePos < 1) {
+        pixels[pi] = 0;
+        pixels[pi+1] = Math.min(255, 100 + score * 12);
+        pixels[pi+2] = 0;
+      } else {
+        pixels[pi]   = Math.min(255, Math.round(colors[ci] * brightness) + tintR);
+        pixels[pi+1] = Math.min(255, Math.round(colors[ci+1] * brightness) + tintG);
+        pixels[pi+2] = Math.min(255, Math.round(colors[ci+2] * brightness) + tintB);
+      }
+      pixels[pi+3] = 255;
+    }
+  }
+
+  repscoreCtx.putImageData(imgData, 0, 0);
+}
+
+// ---- Chart ----
+function renderChart() {
+  const canvas = dom.chartCanvas;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const titleH = canvas.parentElement.querySelector('.panel-title').offsetHeight;
+  const w = rect.width;
+  const h = rect.height - titleH;
+  if (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio) {
+    canvas.width = w * devicePixelRatio;
+    canvas.height = h * devicePixelRatio;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+  }
+
+  const ctx = chartCtx;
+  ctx.save();
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.clearRect(0, 0, w, h);
+
+  const hist = state.metricsHistory;
+  if (hist.length < 2) { ctx.restore(); return; }
+
+  const pad = { top: 20, right: 55, bottom: 25, left: 45 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+
+  // Compute ranges
+  let bpbMin = Infinity, bpbMax = -Infinity;
+  let repMax = 0;
+  for (const d of hist) {
+    const lo = Math.min(d.bpb, d.h0, d.hent);
+    const hi = Math.max(d.bpb, d.h0, d.hent);
+    if (lo < bpbMin) bpbMin = lo;
+    if (hi > bpbMax) bpbMax = hi;
+    if (d.repCount > repMax) repMax = d.repCount;
+  }
+  bpbMin = Math.floor(bpbMin * 10) / 10;
+  bpbMax = Math.ceil(bpbMax * 10) / 10;
+  if (bpbMax - bpbMin < 0.5) bpbMax = bpbMin + 0.5;
+  if (repMax < 10) repMax = 10;
+
+  // Grid
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + plotH * i / 4;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+  }
+
+  // Draw lines
+  function drawLine(key, color, dashed) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash(dashed ? [4, 3] : []);
+    for (let i = 0; i < hist.length; i++) {
+      const x = pad.left + (i / (hist.length - 1)) * plotW;
+      const val = hist[i][key];
+      const y = pad.top + plotH * (1 - (val - bpbMin) / (bpbMax - bpbMin));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  drawLine('bpb', '#56b6c2', false);
+  drawLine('h0', '#808080', true);
+  drawLine('hent', '#e5c07b', false);
+
+  // Replicator count on right axis
+  if (state.evalSelfrep) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#98c379';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < hist.length; i++) {
+      const x = pad.left + (i / (hist.length - 1)) * plotW;
+      const y = pad.top + plotH * (1 - hist[i].repCount / repMax);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Y-axis labels (left)
+  ctx.fillStyle = '#808080'; ctx.font = '10px Consolas, monospace'; ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const val = bpbMin + (bpbMax - bpbMin) * (1 - i / 4);
+    ctx.fillText(val.toFixed(1), pad.left - 4, pad.top + plotH * i / 4 + 3);
+  }
+
+  // Y-axis labels (right) for replicators
+  if (state.evalSelfrep) {
+    ctx.textAlign = 'left'; ctx.fillStyle = '#98c379';
+    for (let i = 0; i <= 4; i++) {
+      const val = repMax * (1 - i / 4);
+      ctx.fillText(Math.round(val).toString(), pad.left + plotW + 4, pad.top + plotH * i / 4 + 3);
+    }
+  }
+
+  // X-axis: epoch range
+  ctx.fillStyle = '#808080'; ctx.textAlign = 'center';
+  ctx.fillText(hist[0].epoch.toString(), pad.left, h - 5);
+  ctx.fillText(hist[hist.length - 1].epoch.toString(), pad.left + plotW, h - 5);
+
+  // Legend
+  const legendY = 10;
+  const legends = [
+    { label: 'bpb', color: '#56b6c2' },
+    { label: 'H0', color: '#808080' },
+    { label: 'H-bpb', color: '#e5c07b' },
+  ];
+  if (state.evalSelfrep) legends.push({ label: 'repls', color: '#98c379' });
+
+  let lx = pad.left;
+  ctx.font = '10px Segoe UI, sans-serif';
+  for (const leg of legends) {
+    ctx.fillStyle = leg.color;
+    ctx.fillRect(lx, legendY - 4, 14, 3);
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'left';
+    ctx.fillText(leg.label, lx + 18, legendY);
+    lx += ctx.measureText(leg.label).width + 30;
+  }
+
+  ctx.restore();
+}
+
+// ---- Byte Frequency ----
+function renderByteFreq(m) {
+  const container = dom.byteBars;
+  // Only rebuild DOM if needed
+  const all = m.frequent_bytes.concat(m.uncommon_bytes);
+  const maxPct = Math.max(0.01, ...all.map(b => b[1]));
+
+  let html = '';
+  for (const [label, pct] of m.frequent_bytes) {
+    const idx = charToByteIndex(label);
+    const [r, g, b] = getByteColor(idx);
+    html += byteBarHtml(label, pct, maxPct, r, g, b);
+  }
+  if (m.uncommon_bytes.length > 0) {
+    html += '<div style="border-top:1px solid #333;margin:4px 0"></div>';
+    for (const [label, pct] of m.uncommon_bytes) {
+      const idx = charToByteIndex(label);
+      const [r, g, b] = getByteColor(idx);
+      html += byteBarHtml(label, pct, maxPct, r, g, b);
+    }
+  }
+  container.innerHTML = html;
+}
+
+function byteBarHtml(label, pct, maxPct, r, g, b) {
+  const w = (pct / maxPct * 100).toFixed(1);
+  return `<div class="byte-row">
+    <div class="byte-swatch" style="background:rgb(${r},${g},${b})"></div>
+    <span class="byte-label mono">${escHtml(label)}</span>
+    <div class="byte-bar-bg"><div class="byte-bar-fill" style="width:${w}%;background:rgb(${r},${g},${b})"></div></div>
+    <span class="byte-pct mono">${(pct * 100).toFixed(1)}%</span>
+  </div>`;
+}
+
+function charToByteIndex(label) {
+  // The server sends character representation strings. Try to map back to byte value.
+  if (label.length === 1) return label.charCodeAt(0);
+  // For non-printable or multi-char representations, fall back to hash
+  let h = 0;
+  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) & 0xff;
+  return h;
+}
+
+function getByteColor(idx) {
+  if (!state.byteColors) return [128, 128, 128];
+  const i = (idx & 0xff) * 3;
+  return [state.byteColors[i], state.byteColors[i + 1], state.byteColors[i + 2]];
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ---- Replicator Panel ----
+function renderRepPanel(m) {
+  dom.repBigNum.textContent = m.replicator_count.toLocaleString();
+  dom.repBigFrac.textContent = (m.replicator_fraction * 100).toFixed(2) + '% of population';
+  dom.repBigBar.style.width = (m.replicator_fraction * 100) + '%';
+}
+
+// ---- Controls ----
+dom.connectBtn.addEventListener('click', connect);
+dom.connectInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect(); });
+dom.pauseBtn.addEventListener('click', () => {
+  state.paused = !state.paused;
+  dom.pauseBtn.textContent = state.paused ? '\u25B6' : '\u23F8';
+  dom.pauseBtn.title = state.paused ? 'Resume rendering' : 'Pause rendering';
+});
+
+// ---- Update rate slider ----
+$('interval-slider').addEventListener('input', (e) => {
+  const decimation = Math.pow(2, parseInt(e.target.value));
+  $('interval-label').textContent = 'every ' + (state.callbackInterval * decimation) + ' ep';
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'set_decimation', value: decimation }));
+  }
+});
+
+// ---- Auto-connect ----
+connect();
+</script>
+</body>
+</html>

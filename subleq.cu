@@ -106,8 +106,8 @@ struct Subleq {
                          len, separators, num_separators);
   }
 
-  static __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
-                                    bool debug) {
+  static __host__ __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
+                                             bool debug) {
     int pos = 0;
     size_t i = 0;
     for (; i < stepcount; i++) {

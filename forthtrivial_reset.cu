@@ -55,7 +55,7 @@ __device__ __host__ ForthOp Forth::GetOpKind(uint8_t c) {
   }
 }
 
-__device__ void Reset(uint8_t *tape, int pos) {
+__host__ __device__ void Reset(uint8_t *tape, int pos) {
   uint64_t seed = 0;
   for (size_t i = 0; i < 2 * kSingleTapeSize; i++) {
     seed = SplitMix64(seed ^ tape[i]);
@@ -67,7 +67,7 @@ __device__ void Reset(uint8_t *tape, int pos) {
   }
 }
 
-__device__ bool ResetIf(uint8_t *tape, int addr) {
+__host__ __device__ bool ResetIf(uint8_t *tape, int addr) {
   return tape[kSingleTapeSize + addr] == 0x13;
 }
 
@@ -119,8 +119,9 @@ void Forth::InitByteColors(
   }
 }
 
-__device__ void Forth::EvaluateOne(uint8_t *tape, int &pos, size_t &nops,
-                                   Forth::Stack &stack) {
+__host__ __device__ void Forth::EvaluateOne(uint8_t *tape, int &pos,
+                                            size_t &nops,
+                                            Forth::Stack &stack) {
   uint8_t command = tape[pos];
   switch (Forth::GetOpKind(command)) {
     case kRead0: {

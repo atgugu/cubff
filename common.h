@@ -68,6 +68,10 @@ struct SimulationParams {
   bool fixed_shuffle = false;
   bool zero_init = false;
   bool eval_selfrep = false;
+  size_t selfrep_iters = 13;
+  size_t selfrep_gens = 5;
+  size_t selfrep_sample_pct = 100;
+  float cpu_fraction = 0.0f;
   std::vector<std::vector<uint32_t>> allowed_interactions;
 };
 

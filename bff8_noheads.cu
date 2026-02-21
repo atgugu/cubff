@@ -19,8 +19,8 @@ namespace {
 
 const char *Bff::name() { return "bff8_noheads"; }
 
-bool __device__ Bff::EvaluateOne(uint8_t *tape, int &head0, int &head1,
-                                 int &pc) {
+bool __host__ __device__ Bff::EvaluateOne(uint8_t *tape, int &head0,
+                                          int &head1, int &pc) {
   char cmd = tape[pc];
   switch (GetOpKind(cmd)) {
     case BffOp::kDec0:

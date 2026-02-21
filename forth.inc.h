@@ -238,18 +238,20 @@ struct Forth {
     uint8_t data[kStackSize] = {};
     size_t stackpos = 0;
     bool overflow = false;
-    __device__ void Push(uint8_t val) {
+    __host__ __device__ void Push(uint8_t val) {
       if (stackpos != kStackSize) {
         data[stackpos++] = val;
       } else {
         overflow = true;
       }
     };
-    __device__ uint8_t Pop() { return stackpos == 0 ? 0 : data[--stackpos]; };
+    __host__ __device__ uint8_t Pop() {
+      return stackpos == 0 ? 0 : data[--stackpos];
+    };
   };
 #ifndef FORTH_CUSTOM_LOGIC
-  static __device__ void EvaluateOne(uint8_t *tape, int &pos, size_t &nops,
-                                     Stack &stack) {
+  static __host__ __device__ void EvaluateOne(uint8_t *tape, int &pos,
+                                              size_t &nops, Stack &stack) {
     uint8_t command = tape[pos];
     switch (GetOpKind(command)) {
       case kRead0: {
@@ -373,11 +375,11 @@ struct Forth {
   }
 #else
 
-  static __device__ void EvaluateOne(uint8_t *tape, int &pos, size_t &nops,
-                                     Stack &stack);
+  static __host__ __device__ void EvaluateOne(uint8_t *tape, int &pos,
+                                              size_t &nops, Stack &stack);
 #endif
-  static __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
-                                    bool debug) {
+  static __host__ __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
+                                             bool debug) {
     Stack stack;
     int pos = 0;
     size_t i = 0;

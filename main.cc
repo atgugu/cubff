@@ -200,6 +200,12 @@ FLAG(bool, permute_programs, true,
 FLAG(bool, fixed_shuffle, false, "deterministic shuffling pattern");
 FLAG(bool, zero_init, false, "zero init");
 FLAG(bool, eval_selfrep, false, "evaluate self replication in every epoch");
+FLAG(size_t, selfrep_iters, 13, "noise iterations for self-rep check");
+FLAG(size_t, selfrep_gens, 5, "generations per iteration for self-rep check");
+FLAG(size_t, selfrep_sample_pct, 100,
+     "percentage of programs to check for self-rep");
+FLAG(double, cpu_fraction, 0.0,
+     "fraction of program pairs to process on CPU (0.0=GPU only)");
 FLAG(size_t, print_interval, 64, "interval between prints");
 FLAG(size_t, save_interval, 256, "interval between saves");
 FLAG(size_t, clear_interval, 2048, "interval between clears");
@@ -228,6 +234,10 @@ int main(int argc, char **argv) {
   params.fixed_shuffle = GetFlag(FLAGS_fixed_shuffle);
   params.zero_init = GetFlag(FLAGS_zero_init);
   params.eval_selfrep = GetFlag(FLAGS_eval_selfrep);
+  params.selfrep_iters = GetFlag(FLAGS_selfrep_iters);
+  params.selfrep_gens = GetFlag(FLAGS_selfrep_gens);
+  params.selfrep_sample_pct = GetFlag(FLAGS_selfrep_sample_pct);
+  params.cpu_fraction = GetFlag(FLAGS_cpu_fraction);
   params.save_to = GetFlag(FLAGS_checkpoint_dir);
   params.save_interval = GetFlag(FLAGS_save_interval);
   if (params.fixed_shuffle &&
@@ -348,6 +358,9 @@ int main(int argc, char **argv) {
         if (state.replication_per_prog[i] >= kSelfrepThreshold) {
           repl_count++;
         }
+      }
+      if (params.selfrep_sample_pct > 0 && params.selfrep_sample_pct < 100) {
+        repl_count = repl_count * 100 / params.selfrep_sample_pct;
       }
       if (!GetFlag(FLAGS_disable_output)) {
         if (state.epoch % clear_interval == 1) {

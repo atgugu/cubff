@@ -286,8 +286,8 @@ struct Bff {
   // incremented, and evaluation stops if it overflows 2*kSingleTapeSize.
   // Returns true if the op was not a comment.
 #ifndef BFF_CUSTOM_LOGIC
-  static bool __device__ EvaluateOne(uint8_t *tape, int &head0, int &head1,
-                                     int &pc) {
+  static bool __host__ __device__ EvaluateOne(uint8_t *tape, int &head0,
+                                              int &head1, int &pc) {
     char cmd = tape[pc];
     switch (GetOpKind(cmd)) {
       case BffOp::kDec0:
@@ -349,12 +349,12 @@ struct Bff {
   }
 
 #else
-  static __device__ bool EvaluateOne(uint8_t *tape, int &head0, int &head1,
-                                     int &pc);
+  static __host__ __device__ bool EvaluateOne(uint8_t *tape, int &head0,
+                                              int &head1, int &pc);
 #endif
 
-  static __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
-                                    bool debug) {
+  static __host__ __device__ size_t Evaluate(uint8_t *tape, size_t stepcount,
+                                             bool debug) {
     size_t nskip = 0;
 
     int pos = 0;
